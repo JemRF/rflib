@@ -24,14 +24,16 @@
 ********************************************************************************
 *
 * Module     : cpp
-* Author     : Jonathan Evans
+* Author     : J. Evans
 * Description: JemRF RF Module Driver for Arduino
 */
 
 #include "rflib.h"
-#include <SoftwareSerial.h>
 
-SoftwareSerial mySerial(RX, TX); // RX, TX
+#if (!ARDUINO_ARCH_ESP32)
+#include <SoftwareSerial.h>
+SoftwareSerial Serial2(RX, TX); // RX, TX
+#endif
 
 RFLIB:: RFLIB(void)
 {
@@ -46,7 +48,7 @@ void d_print(char * message){
 
 void RFLIB::begin(void)
 {
-  mySerial.begin(9600);
+  Serial2.begin(9600);
   delay(100);
   char_cnt=0;
   got_ack=0;
@@ -68,11 +70,10 @@ void RFLIB::transmit(char * message){
   delay(100);
   got_ack=0;
   got_message=0;
-  id_match=0;
   strncpy(message_out, message, 12);
   d_print("Sending message");
   d_print(message);
-  mySerial.write(message_out);
+  Serial2.write(message_out);
   timeout=false;
   if (retries_ind){
     overall_time = millis();
@@ -86,7 +87,6 @@ void RFLIB::process_rf(void){
   
   got_ack=0;
   got_message=0;
-  id_match=0;
   timeout=0;
   
   if (sent_time > 0 && !timeout){
@@ -98,7 +98,7 @@ void RFLIB::process_rf(void){
     else {
       if (millis() - sent_time > resend_timeout) { //resend after 1.5 seconds if no reply
         d_print("Timeout - Re-send timeout exceeded. Re-sending...");
-        mySerial.write(message_out); //re-transmit the message
+        Serial2.write(message_out); //re-transmit the message
         sent_time = millis();
       }     
     }    
@@ -107,9 +107,9 @@ void RFLIB::process_rf(void){
   if (char_cnt==12){
     memset(message_in,0x00,13);
   }
-  if (mySerial.available()) { //# we have a message arriving
-  //while (mySerial.available()) { //# we have a message arriving
-    inChar = mySerial.read();
+  if (Serial2.available()) { //# we have a message arriving
+  //while (Serial2.available()) { //# we have a message arriving
+    inChar = Serial2.read();
     if (inChar == 'a') {
       d_print("Message received");
       char_cnt = 0;
@@ -136,4 +136,139 @@ void RFLIB::process_rf(void){
       }      
     }
   }
+}
+
+char *strip (char *dest, const char *src, uint8_t len)
+{
+  int i;
+  for (i=0;i<len;i++){
+    if (src[i]!='-'){
+      dest[i]=src[i];
+    }
+    else {
+      dest[i]=' ';      
+    }
+  }
+  dest[i]=0x00;
+  return dest;
+}
+
+void RFLIB::process_message(char *message){
+  float sdata;
+  char smessage[13];
+  char temp[13], temp2[13];
+  memcpy(smessage,message,13); 
+  memset(sensordata,0x00,10);  
+  memset(description,0x00,15);  
+  type=0;
+  PEPFunction=0;
+  
+  strncpy(dev_id, smessage+1 ,2);
+  
+  if (strncmp(smessage+3,"BUTTONON",8)==0){
+    strncpy(sensordata, "0",1);
+    PEPFunction=26;
+    type=1;
+    strncpy(description,"BUTTON",6);
+    }
+
+  if (strncmp(smessage+3,"STATEON", 7)==0){
+    strncpy(sensordata, "0",1);
+    PEPFunction=38;
+    type=2;
+    strncpy(description,"STATE",5);
+    }
+
+  if (strncmp(smessage+3,"STATEOFF",8)==0){
+    strncpy(sensordata, "1",1);
+    PEPFunction=38;
+    type=2;
+    strncpy(description,"STATE",5);
+    }
+
+  if (strncmp(smessage+3,"BUTTONOFF",9)==0){
+    strncpy(sensordata, "1",1);
+    PEPFunction=26;
+    type=1;
+    strncpy(description,"BUTTON",6);
+    }
+
+  if (strncmp(smessage+3,"TMPA",4)==0){
+    strip(sensordata, smessage+3+4, 5);
+    PEPFunction=37;
+    type=3;
+    strncpy(description,"TMPA",3);
+    }
+
+  if (strncmp(smessage+3,"ANAA", 4)==0){
+    strip(sensordata, smessage+3+4, 5);    
+    PEPFunction=37;
+    type=4;
+    strncpy(description,"ANAA",4);
+
+  }
+
+  if (strncmp(smessage+3,"ANAB", 4)==0){
+    strip(sensordata, smessage+3+4, 5);    
+    PEPFunction=37;
+    type=10;
+    strncpy(description,"ANAB",4);
+  }
+
+  if (strncmp(smessage+3,"TMPC",4)==0){
+    strip(sensordata, smessage+3+4, 5);    
+    PEPFunction=37;
+    type=6;
+    strncpy(description,"TMPC",4);
+    }
+
+  if (strncmp(smessage+3,"TMPB",4)==0){ 
+    strip(sensordata, smessage+3+4, 5);    
+    PEPFunction=37;
+    type=5;
+    strncpy(description,"TMPB",4);
+    }
+                       
+  if (strncmp(smessage+3,"HUM",3)==0){
+    strip(sensordata, smessage+3+3, 6);    
+    PEPFunction=37;
+    type=7;
+    strncpy(description,"HUM",3);
+    }
+
+  if (strncmp(smessage+3,"PA",2)==0){
+    strip(sensordata, smessage+3+2, 7);    
+    PEPFunction=37;
+    type=8;
+    strncpy(description,"PA",2);
+    }
+        
+  if (strncmp(smessage+3,"BATT",4)==0){
+    strip(sensordata, smessage+3+4, 5);    
+    PEPFunction=22;
+    type=9;
+    strncpy(description,"BATT",4);
+    }
+
+  if (strncmp(smessage+3,"RELAYA",6)==0){
+    strip(sensordata, smessage+3+6, 3);    
+    PEPFunction=0;
+    type=11;
+    strncpy(description,"RELAYA",5);
+    }
+
+  if (strncmp(smessage+3,"RELAYB",6)==0){
+    strip(sensordata, smessage+3+4, 3);    
+    PEPFunction=0;
+    type=12;
+    strncpy(description,"RELAYA",5);
+    }
+
+  if (strncmp(smessage+3,"HELLO",5)==0){
+    strncpy(sensordata, "HELLO",5);    
+    PEPFunction=0;
+    type=13;
+    strncpy(description,"HELLO",5);
+    }
+ 
 }

@@ -72,14 +72,18 @@ public:
   int filter_duplicates;
   char message_in[13];
   char message_out[13];
+  char sensordata[10];
+  int PEPFunction;
+  int type;
+  char description[15];
+  char dev_id[2];
   int got_message;
-  int id_match;
   RFLIB(void);
-  int request_reply(char *message, int timeout);
   void begin(void);
-  void RFLIB::process_rf(void);
-  void RFLIB::transmit(char * message);
-  void RFLIB::transmit(char * message, int retries);
+  void process_rf(void);
+  void transmit(char * message);
+  void transmit(char * message, int retries);
+  void process_message(char *message);
 };
 
 #endif
