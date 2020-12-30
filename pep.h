@@ -9,8 +9,8 @@
 #define SIREN_DURATION 120
 #define SIREN_DELAY  30
 #define CHIME_PIN 2
-#define RF
-#define DS18B20
+//#define RF
+//#define DS18B20
 #define DS18B20_INTERVAL 300000 //5 minutes
 
 extern const char* ssid;

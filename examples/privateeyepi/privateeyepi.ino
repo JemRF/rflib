@@ -40,9 +40,9 @@ DS18B20:
 RFLIB rflib;
 #endif
 
-const char* pep_token = "c518ea5bede33fa930124247973697f9"; //Enter your PrivateEyePi token between quotes
-const char* ssid      = "BELL086";       //Enter your WIFI router SSID between quotes
-const char* password  = "916E73E1A7E4";  //Enter your WIFI password SSID between quotes
+const char* pep_token = ""; //Enter your PrivateEyePi token between quotes
+const char* ssid      = "";       //Enter your WIFI router SSID between quotes
+const char* password  = "";  //Enter your WIFI password SSID between quotes
 //Enter wired sensors here
 //Add ,{xx,'s',0} settings for every wired sensor whee xx is the GPIO number
 //GPIO 15 and 19 are configures as follows:
