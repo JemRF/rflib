@@ -68,6 +68,7 @@ void setup() {
  
   }
 
+#ifdef RF
 //Monitors the RF message queue and sends data to PrivateEyePi server
 void poll_rf_queue(){
   char message[13];
@@ -78,6 +79,7 @@ void poll_rf_queue(){
     }
   }
 }
+#endif
 
 void loop() {
  poll_wired_sensors(); 
