@@ -4,65 +4,53 @@ WIFI Gateway for PrivateEyePi using ESP-32 WIFI chip and Flex RF Module
 Tested on a ESP-WROOM-32 Development Board
 
 Wiring:
+
+JemRF Flex Module:
+ - The ESP-32 has two serial ports so we are using Serial2 for RF data so that you can use Serial1 for debugging through the Arduino Serial monitor
+
 Flex Pin 15 (TX) -> ESP-32 GPIO16 (RX2)
 Flex Pin 16 (TX) -> ESP-32 GPIO17 (TX2)
 Flex Pin 01 3V3  -> ESP-32 3V3
 Flex Pin 10 GND  -> ESP-32 GND
 
-Configure the Flex module as Type 2
+ - Configure the Flex module as Type 2
 
-Notes:
- - The ESP-32 is duel core so this code utilizes both cores, one core for receiving RF messages through RX2 and the other core for calling HTTP GET requests to PrivateEyePi. The will ensure no radio messages are missed while time is spent doing the HTTP requests.
-
- - The ESP-32 has to serial ports so we are using Serial2 so that you can use Serial1 for debugging through the Arduino Serial monitor
+Door/Window Sensors:
+ - GPIOXX to one side of the alarm/door switch
+ - GND to the other side of the alarm/door switch
+ 
+DS18B20:
+                                                           0
+3 Pins of the DS18B20 flat side facing you with legs down |||
+                                                          123
+ - GPIO4 - DS18B20 Pin 2 (can be changed in pep.h > #define ONE_WIRE_BUS 4)
+ - 3V3   - DS18B20 Pin 3
+ - GND   - DS18B20 Pin 1
+ - DS18B20 Pin 2 to 4.7k resistor to DS18B20 Pin 3
+ 
  
 */
 
 #include <rflib.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
-#define MESSAGE_BUFFER_SIZE 20
+#include <rflib.h>
+#include <pep.h>
 
+#ifdef RF
 RFLIB rflib;
-TaskHandle_t TaskA;
+#endif
 
-const char* ssid = "";       //Enter your WIFI router SSID between quotes
-const char* password =  "";  //Enter your WIFI password SSID between quotes
-const char* pep_token =  ""; //Enter your PrivateEyePi token between quotes
+const char* pep_token = "c518ea5bede33fa930124247973697f9"; //Enter your PrivateEyePi token between quotes
+const char* ssid      = "BELL086";       //Enter your WIFI router SSID between quotes
+const char* password  = "916E73E1A7E4";  //Enter your WIFI password SSID between quotes
+//Enter wired sensors here
+//Add ,{xx,'s',0} settings for every wired sensor whee xx is the GPIO number
+//GPIO 15 and 19 are configures as follows:
+uint8_t wired_sensors[20][3] = {{15,'s',0},{19,'s',0}}; 
 
-uint8_t message_buf[20][13];
-uint8_t msgcnt=0;
-
-void myFunc() {
-
-  Serial.println("Got message...");
-  Serial.println(rflib.message_in);
-  if (msgcnt>=MESSAGE_BUFFER_SIZE-1) msgcnt=0;
-  //Save the RF Message in a message buffer for processing 
-  memcpy(message_buf[msgcnt++], rflib.message_in, 13);
-}
-
-void TransmitToWifi(){
-  uint8_t x;
-  while (1){
-    for (x=0;x<MESSAGE_BUFFER_SIZE;x++){
-      if (message_buf[x][0]!=0x00){ //if there is an RF message in the queue then do an HTTP call to the PrivateEyePi server
-        Serial.println("Processing message");
-        Serial.println((char *)message_buf[x]); //process the message
-        rflib.process_message((char *)message_buf[x]);
-        memset(message_buf[x],0x00,13); //take the message off the queue
-        if (rflib.PEPFunction > 0) {
-          http_request(rflib.PEPFunction, rflib.sensordata, rflib.dev_id);
-        }
-      }
-    }
-  }
-}
 
 void setup() {
   Serial.begin(9600);
-  rflib.RegisterCallback(myFunc);
-  rflib.begin();
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi..");
   while (WiFi.status() != WL_CONNECTED) {
@@ -71,58 +59,31 @@ void setup() {
     }
   Serial.println("");
   Serial.println("Connected to the WiFi network");
-
-  xTaskCreatePinnedToCore(
-    rf_loop,                /* pvTaskCode */
-    "Workload1",            /* pcName */
-    1000,                   /* usStackDepth */
-    NULL,                   /* pvParameters */
-    1,                      /* uxPriority */
-    &TaskA,                 /* pxCreatedTask */
-    1);                     /* xCoreID */
   
-  //Clear the message buffer
-  for (int x=0;x<MESSAGE_BUFFER_SIZE;x++){
-    memset(message_buf[x],0x00,13);
-    }
+#ifdef RF
+  rflib.rf_init();
+#endif
 
-  }
-
-
-void http_request(int PEP_Function, String sensordata, String dev_id) {
-    String searchString;
-    String url;
-    int rt;
-    HTTPClient http;
-      
-    url = "https://www.privateeyepi.com/alarmhostr.php?token="+(String)pep_token+"&function="+String(PEP_Function)+"&opcode0=" + dev_id+"&opcode1=" + sensordata;
-    Serial.println("Requesting URL: ");
-    Serial.println(url);
-    http.begin(url); //Specify the URL and certificate
-    int httpCode = http.GET();             
-
-    Serial.println(httpCode);
-    if (httpCode > 0) { //Check for the returning code
-        String payload = http.getString();
-        Serial.println(httpCode);
-        Serial.println(payload);
-      }
-    else {
-      Serial.println("Error on HTTP request");
-    }
+  setup_wired_sensors();
  
-    http.end(); //Free the resources
-    return;    
   }
 
-void rf_loop( void * parameter ){
-  while (1){
-    rflib.filter_duplicates=1;
-    rflib.process_rf();  
+//Monitors the RF message queue and sends data to PrivateEyePi server
+void poll_rf_queue(){
+  char message[13];
+  if (get_from_queue(message)){
+    rflib.process_message(message);
+    if (rflib.PEPFunction > 0) {
+      send_data_to_server(rflib.PEPFunction, rflib.dev_id, rflib.sensordata, "");
+    }
   }
 }
 
 void loop() {
-  //Important to call profess_rf() frequently and have no delays in this loop
- TransmitToWifi(); 
-}
+ poll_wired_sensors(); 
+#ifdef RF
+ poll_rf_queue();
+#endif
+ }
+
+

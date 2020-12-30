@@ -10,8 +10,6 @@
 
 RFLIB rflib;
 
-int requested_state;
-
 void myFunc() {
 
   Serial.println("Got message...");

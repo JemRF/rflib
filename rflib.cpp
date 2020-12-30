@@ -30,6 +30,18 @@
 
 #include "rflib.h"
 
+extern RFLIB rflib;
+
+#if (ARDUINO_ARCH_ESP32)
+TaskHandle_t TaskA;
+#endif
+
+uint8_t message_buf[20][13];
+uint8_t msgcnt=0;
+
+#define DEBUG true // flag to turn on/off (true/false) debugging
+#define Serial if(DEBUG)Serial
+
 #if (!ARDUINO_ARCH_ESP32)
 #include <SoftwareSerial.h>
 SoftwareSerial Serial2(RX, TX); // RX, TX
@@ -40,16 +52,14 @@ RFLIB:: RFLIB(void)
 
 }
 
-void d_print(char * message){
-#ifdef DEBUG
-  Serial.println(message);
-#endif
-}
-
 void RFLIB::begin(void)
 {
   Serial2.begin(9600);
   delay(100);
+  Serial2.flush();
+  while (Serial2.available()) { //# we have a message arriving
+    Serial2.read();
+    }
   char_cnt=0;
   got_ack=0;
   got_message=0;
@@ -58,6 +68,30 @@ void RFLIB::begin(void)
   overall_time=0;
   sent_time=0;
   resend_timeout=2000;
+}
+
+void rf_gateway_in() { //This function is called every time a message is received through the RF module
+  Serial.println("Got RF message...");
+  Serial.println(rflib.message_in);
+  //Save the RF Message in a message buffer for processing 
+  add_to_queue(rflib.message_in); 
+}
+
+void RFLIB::rf_init(){
+  rflib.RegisterCallback(rf_gateway_in);
+  rflib.begin(); 
+  init_queue();
+
+#if (ARDUINO_ARCH_ESP32)
+  xTaskCreate(
+    rf_loop,         // Function that should be called
+    "RF_LOOP",       // Name of the task (for debugging)
+    8192,            // Stack size (bytes)
+    NULL,            // Parameter to pass
+    1,               // Task priority
+    NULL             // Task handle
+  );
+#endif
 }
 
 void RFLIB::transmit(char * message, int retries){
@@ -71,8 +105,8 @@ void RFLIB::transmit(char * message){
   got_ack=0;
   got_message=0;
   strncpy(message_out, message, 12);
-  d_print("Sending message");
-  d_print(message);
+  Serial.println("Sending message");
+  Serial.println(message);
   Serial2.write(message_out);
   timeout=false;
   if (retries_ind){
@@ -91,13 +125,13 @@ void RFLIB::process_rf(void){
   
   if (sent_time > 0 && !timeout){
     if (millis() - overall_time > total_timeout) { //timeout after n seconds
-      d_print("Timeout - Total timeout exceeded");
+      Serial.println("Timeout - Total timeout exceeded");
       timeout=true;
       sent_time=0;
       }
     else {
       if (millis() - sent_time > resend_timeout) { //resend after 1.5 seconds if no reply
-        d_print("Timeout - Re-send timeout exceeded. Re-sending...");
+        Serial.println("Timeout - Re-send timeout exceeded. Re-sending...");
         Serial2.write(message_out); //re-transmit the message
         sent_time = millis();
       }     
@@ -111,7 +145,6 @@ void RFLIB::process_rf(void){
   //while (Serial2.available()) { //# we have a message arriving
     inChar = Serial2.read();
     if (inChar == 'a') {
-      d_print("Message received");
       char_cnt = 0;
     }
     if (char_cnt >= 0 && char_cnt < 12) {
@@ -123,7 +156,7 @@ void RFLIB::process_rf(void){
       if (strncmp(message_in, prev_message,12)!=0 || !filter_duplicates){
         strncpy(prev_message, message_in,12);
         if (strncmp(message_in, message_out,12)==0) {
-          d_print("ACK received");
+          Serial.println("ACK received");
           got_ack=1;
         }
         if (strncmp(message_in+1, message_out+1,2)==0) {  //ID's are the same
@@ -133,6 +166,10 @@ void RFLIB::process_rf(void){
         memset(message_out,0x00,13);
         if (callback_registered)
           Event();  
+      } 
+      else{
+        Serial.print("Ignoring duplicate RF message:");
+        Serial.println(message_in);
       }      
     }
   }
@@ -272,3 +309,38 @@ void RFLIB::process_message(char *message){
     }
  
 }
+
+void rf_loop( void * parameter ){
+  while (1){
+    rflib.filter_duplicates=1;
+    rflib.process_rf();  
+  }
+}
+
+uint8_t get_from_queue(char message[13]){
+  uint8_t x;
+  for (x=0;x<MESSAGE_BUFFER_SIZE;x++){
+    if (message_buf[x][0]!=0x00){ //if there is an RF message in the queue then do an HTTP call to the PrivateEyePi server
+      Serial.println("Processing RF message");
+      memcpy(message,message_buf[x],13);
+      memset(message_buf[x],0x00,13); //take the message off the queue
+      Serial.println(message);
+      return(1);
+    }
+  }  
+  return(0);
+}
+
+void init_queue(){
+  //Clear the message buffer
+  for (int x=0;x<MESSAGE_BUFFER_SIZE;x++){
+    memset(message_buf[x],0x00,13);
+    }
+}
+
+void add_to_queue(char *message){
+  if (msgcnt>=MESSAGE_BUFFER_SIZE-1) msgcnt=0;
+  memcpy(message_buf[msgcnt++], message, 13);
+}   
+
+ 

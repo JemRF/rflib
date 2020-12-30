@@ -38,10 +38,13 @@
 #include <WProgram.h>
 #endif
 
-//#define DEBUG
 #define RX 2
 #define TX 3
 #define RESEND_TIMEOUT 1500
+#define MESSAGE_BUFFER_SIZE 20
+
+extern uint8_t message_buf[20][13];
+extern uint8_t msgcnt;
 
 //RFLIB
 class RFLIB
@@ -84,6 +87,12 @@ public:
   void transmit(char * message);
   void transmit(char * message, int retries);
   void process_message(char *message);
+  void rf_init();
 };
+
+void init_queue();
+void add_to_queue(char *message);
+uint8_t get_from_queue(char message[13]);
+void rf_loop( void * parameter );
 
 #endif

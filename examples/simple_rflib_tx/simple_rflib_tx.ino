@@ -9,7 +9,6 @@
 RFLIB rflib;
 
 void setup() {
-  Serial.begin(9600);
   rflib.begin();
 }
 
