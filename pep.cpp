@@ -48,6 +48,9 @@ extern const char* pep_token;
 extern const char* ssid;
 extern const char* password;
 extern uint8_t wired_sensors[20][3];
+extern const char* smtp_corp;
+extern const char* smtp_password;
+extern const char* smtp_user;
 
 void tone(uint8_t pin, unsigned int frequency, unsigned long duration, uint8_t channel)
 {
@@ -307,10 +310,10 @@ void compileEmailAlert(String sensor_no, String rule_id) {
   Serial.println("Received Address details");
   Serial.println(emailstr);
 
-  sendEmail(emailstr, messagestr, "mail.smtp2go.com", 80, "Z2FkamV0bnV0QGdtYWlsLmNvbQ==", "Z2ZsOVBpaUl1VlRQ");
+  sendEmail(emailstr, messagestr);
 }
 
-unsigned int sendEmail(String EmailTo, String EmailMessage, char smtpcorp[50], int port, String username, String password) {
+unsigned int sendEmail(String EmailTo, String EmailMessage) {
   
   String searchString, tempstr;
   int prev, x;
@@ -321,7 +324,7 @@ unsigned int sendEmail(String EmailTo, String EmailMessage, char smtpcorp[50], i
   ip = WiFi.localIP();
   sprintf(myIpString, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 
-  if (client.connect( smtpcorp, port) == 1) {
+  if (client.connect( smtp_corp, 80) == 1) {
     Serial.println("connected email server");
   } else {
     Serial.println("connection failed email server");
@@ -347,7 +350,7 @@ unsigned int sendEmail(String EmailTo, String EmailMessage, char smtpcorp[50], i
 
   Serial.println("Sending User");
   // Change to your base64 encoded user
-  client.println(username);//
+  client.println(smtp_user);//
   if (!eRcv(&client)) {
     Serial.println("user");
     return 0 ;
@@ -355,7 +358,7 @@ unsigned int sendEmail(String EmailTo, String EmailMessage, char smtpcorp[50], i
 
   Serial.println("Sending Password");
   // change to your base64 encoded password
-  client.println(password);//
+  client.println(smtp_password);//
 
   if (!eRcv(&client)) {
     Serial.println("ehlo");
