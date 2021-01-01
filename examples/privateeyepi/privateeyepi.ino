@@ -41,13 +41,17 @@ RFLIB rflib;
 #endif
 
 const char* pep_token = ""; //Enter your PrivateEyePi token between quotes
-const char* ssid      = "";       //Enter your WIFI router SSID between quotes
-const char* password  = "";  //Enter your WIFI password SSID between quotes
+const char* ssid      = ""; //Enter your WIFI router SSID between quotes
+const char* password  = ""; //Enter your WIFI password SSID between quotes
 //Enter wired sensors here
 //Add ,{xx,'s',0} settings for every wired sensor whee xx is the GPIO number
 //GPIO 15 and 19 are configures as follows:
 uint8_t wired_sensors[20][3] = {{15,'s',0},{19,'s',0}}; 
 
+//Email alert configuration
+const char* smtp_corp="";
+const char* smtp_password="";
+const char* smtp_user="";
 
 void setup() {
   Serial.begin(9600);
