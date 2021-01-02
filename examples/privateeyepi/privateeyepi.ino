@@ -52,6 +52,7 @@ uint8_t wired_sensors[20][3] = {{15,'s',0},{19,'s',0}};
 const char* smtp_corp="";
 const char* smtp_password="";
 const char* smtp_user="";
+const uint8_t smtp_port=80;
 
 void setup() {
   Serial.begin(9600);

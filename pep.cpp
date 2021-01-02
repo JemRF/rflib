@@ -51,6 +51,7 @@ extern uint8_t wired_sensors[20][3];
 extern const char* smtp_corp;
 extern const char* smtp_password;
 extern const char* smtp_user;
+extern const uint8_t smtp_port;
 
 void tone(uint8_t pin, unsigned int frequency, unsigned long duration, uint8_t channel)
 {
@@ -140,6 +141,13 @@ uint8_t process_actions(char buf[255], uint8_t length){
   uint8_t x=0, y=0;
   uint8_t pep_commands[20][10];
   
+  
+  for (int i=0;i<20;i++){
+    for (int j=0;j<10;j++){
+      pep_commands[i][j]=0x00;
+    }
+  }
+  
   for (int i=0;i<length;i++){
     if (buf[i]!=','){
       pep_commands[x][y++]=buf[i];
@@ -153,20 +161,18 @@ uint8_t process_actions(char buf[255], uint8_t length){
   for (int i=0;i<x;i++){  
     if (strncmp((char *)pep_commands[i], "/SIREN", 6)==0){
       sound_siren(pep_commands[i+2]);
-      //FYI
-      //pep_command[i+1] = SensorID
-      //pep_command[i+2] = ZoneID
       rt=2;
     }
     if (strncmp((char *)pep_commands[i], "/CHIME", 6)==0){
       chime();
-      //FYI
-      //pep_command[i+1] = SensorID
-      //pep_command[i+2] = ZoneID
       rt=4;
     }
-    if (strncmp((char *)pep_commands[i], "/EMAIL", 5)==0){
-      Serial.println("EMAIL!!");
+    if (strncmp((char *)pep_commands[i], "/EMAIL", 5)==0){ //email alert from custom rule
+      compileEmailAlert(String((char *)pep_commands[i+2]), String((char *)pep_commands[i+1]));
+      rt=3;
+    } 
+    if (strncmp((char *)pep_commands[i], "/SEMAIL", 5)==0){ //email alert from standard alarm rule
+      compileEmailAlert(String((char *)pep_commands[i+1]), "");
       rt=3;
     } 
     if (strncmp((char *)pep_commands[i], "/TRUE", 5)==0){
@@ -286,16 +292,21 @@ void compileEmailAlert(String sensor_no, String rule_id) {
   char buf[255];
 
   searchString = "/EMAIL";
-
-  payload_length = http_request(35, rule_id, sensor_no,"", buf);
-  if (String(buf).indexOf(searchString) > 0) {
-    return;
-  }
   
-  Serial.println("Received Alert details");
-  Serial.println(buf);
-  messagestr = String(buf).substring(7,String(buf).length());
-  Serial.println(messagestr);
+  if (rule_id==""){
+    payload_length = http_request(6, sensor_no,"","", buf);
+    if (String(buf).indexOf(searchString) > 0) {
+      return;
+    }        
+    messagestr = "This is an automated email from your house alarm system. Alarm activated for Zone,Location - "+String(buf).substring(0,String(buf).length()-3);
+  }
+  else {
+    payload_length = http_request(35, rule_id, sensor_no,"", buf);
+    if (String(buf).indexOf(searchString) > 0) {
+      return;
+    }    
+    messagestr = String(buf).substring(7,String(buf).length());
+  }
 
   searchString = "/ADDRESS";
   payload_length = http_request(36, "","","",buf);
@@ -324,7 +335,7 @@ unsigned int sendEmail(String EmailTo, String EmailMessage) {
   ip = WiFi.localIP();
   sprintf(myIpString, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 
-  if (client.connect( smtp_corp, 80) == 1) {
+  if (client.connect( smtp_corp, smtp_port) == 1) {
     Serial.println("connected email server");
   } else {
     Serial.println("connection failed email server");
@@ -334,21 +345,18 @@ unsigned int sendEmail(String EmailTo, String EmailMessage) {
     return 0 ;
   }
 
-  Serial.println("Sending ehlo");
   client.println("EHLO " + (String)myIpString);
   if (!eRcv(&client)) {
     Serial.println("ehlo");
     return 0 ;
   }
 
-  Serial.println("Sending auth login");
   client.println("auth login");
   if (!eRcv(&client)) {
     Serial.println("auth");
     return 0 ;
   }
 
-  Serial.println("Sending User");
   // Change to your base64 encoded user
   client.println(smtp_user);//
   if (!eRcv(&client)) {
@@ -356,7 +364,6 @@ unsigned int sendEmail(String EmailTo, String EmailMessage) {
     return 0 ;
   }
 
-  Serial.println("Sending Password");
   // change to your base64 encoded password
   client.println(smtp_password);//
 
@@ -415,7 +422,6 @@ unsigned int sendEmail(String EmailTo, String EmailMessage) {
     return 0 ;
   }
 
-  Serial.println("Sending QUIT");
   client.println("QUIT");
 
   if (!eRcv(&client)) {
@@ -423,8 +429,7 @@ unsigned int sendEmail(String EmailTo, String EmailMessage) {
     return 0 ;
   }
 
-
-  Serial.println("disconnected");
+  Serial.println("Email sent OK");
 
   return 1;
 }
@@ -553,6 +558,7 @@ void setup_wired_sensors(){
   DS18B20_timer = millis();
   Serial.println("Starting DS18B20");
   sensors.begin();
+  DS18B20_timer = millis() + DS18B20_INTERVAL; //trigger the initial read
 #endif
   }
 #endif

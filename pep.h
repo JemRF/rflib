@@ -10,7 +10,7 @@
 #define SIREN_DELAY  30
 #define CHIME_PIN 2
 //#define RF
-//#define DS18B20
+#define DS18B20
 #define DS18B20_INTERVAL 300000 //5 minutes
 
 extern const char* smtp_corp;
@@ -20,6 +20,7 @@ extern const char* ssid;
 extern const char* password;
 extern const char* pep_token;
 extern uint8_t wired_sensors[20][3]; 
+extern const uint8_t smtp_port;
 
 void tone(uint8_t pin, unsigned int frequency, unsigned long duration = 0, uint8_t channel = TONE_CHANNEL);
 void noTone(uint8_t pin, uint8_t channel = TONE_CHANNEL);
