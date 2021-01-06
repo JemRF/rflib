@@ -78,9 +78,10 @@ void setup() {
 void poll_rf_queue(){
   String devid;
   char message[13];
+  devid=String(rflib.dev_id);
   if (get_from_queue(message)){
     rflib.process_message(message);
-    //Give duel sensors unique ID's per sensor
+    //Give duel sensors a unique ID per sensor
     if (rflib.type==5) //Temp B
       devid="1"+String(rflib.dev_id);
     if (rflib.type==6) //Temp C
