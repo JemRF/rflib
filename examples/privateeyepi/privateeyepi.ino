@@ -72,15 +72,28 @@ void setup() {
   setup_wired_sensors();
  
   }
-
+  
 #ifdef RF
 //Monitors the RF message queue and sends data to PrivateEyePi server
 void poll_rf_queue(){
+  String devid;
   char message[13];
   if (get_from_queue(message)){
     rflib.process_message(message);
+    //Give duel sensors unique ID's per sensor
+    if (rflib.type==5) //Temp B
+      devid="1"+String(rflib.dev_id);
+    if (rflib.type==6) //Temp C
+      devid="1"+String(rflib.dev_id);
+    if (rflib.type==7) //Humidity     
+      devid="3"+String(rflib.dev_id);
+    if (rflib.type==8) //Pressure           
+      devid="5"+String(rflib.dev_id);
+    if (rflib.type==10)//Analog B           
+      devid="4"+String(rflib.dev_id);
+    
     if (rflib.PEPFunction > 0) {
-      send_data_to_server(rflib.PEPFunction, rflib.dev_id, rflib.sensordata, "");
+      send_data_to_server(rflib.PEPFunction, devid, rflib.sensordata, "");
     }
   }
 }
