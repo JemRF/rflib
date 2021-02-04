@@ -29,17 +29,26 @@
 ********************************************************************************
 */
 
+//Uncomment this line for Raspberry Pi PICO platform
+//#define RPI_PICO_PLATFORM 1
+
 #ifndef rflib_h
 #define rflib_h
 
 #if (ARDUINO >= 100)
 #include <Arduino.h>
 #else
+#ifdef RPI_PICO_PLATFORM
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/uart.h"
+#else
 #include <WProgram.h>
 #endif
+#endif
 
-#define RX 2
-#define TX 3
+#define RX 1
+#define TX 0
 #define RESEND_TIMEOUT 1500
 #define MESSAGE_BUFFER_SIZE 20
 

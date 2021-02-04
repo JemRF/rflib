@@ -40,11 +40,29 @@ uint8_t message_buf[20][13];
 uint8_t msgcnt=0;
 
 #define DEBUG true // flag to turn on/off (true/false) debugging
+#ifndef RPI_PICO_PLATFORM
 #define Serial if(DEBUG)Serial
+#endif
 
 #if (!ARDUINO_ARCH_ESP32)
+#ifdef RPI_PICO_PLATFORM
+#include "hardware/uart.h"
+#include <string.h>
+#include <time.h>
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#else
 #include <SoftwareSerial.h>
 SoftwareSerial Serial2(RX, TX); // RX, TX
+#endif
+#endif
+
+#ifdef RPI_PICO_PLATFORM
+uint64_t millis() {
+  using namespace std::chrono;
+  return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
 #endif
 
 RFLIB:: RFLIB(void)
@@ -54,12 +72,18 @@ RFLIB:: RFLIB(void)
 
 void RFLIB::begin(void)
 {
+#ifdef RPI_PICO_PLATFORM
+  uart_init(uart0, 9600);
+  gpio_set_function(TX, GPIO_FUNC_UART);
+  gpio_set_function(RX, GPIO_FUNC_UART);
+#else
   Serial2.begin(9600);
   delay(100);
   Serial2.flush();
   while (Serial2.available()) { //# we have a message arriving
     Serial2.read();
     }
+#endif
   char_cnt=0;
   got_ack=0;
   got_message=0;
@@ -71,8 +95,13 @@ void RFLIB::begin(void)
 }
 
 void rf_gateway_in() { //This function is called every time a message is received through the RF module
+#ifndef RPI_PICO_PLATFORM
   Serial.println("Got RF message...");
   Serial.println(rflib.message_in);
+#else
+  printf("Got RF message...");
+  printf(rflib.message_in);
+#endif
   //Save the RF Message in a message buffer for processing 
   add_to_queue(rflib.message_in); 
 }
@@ -101,13 +130,23 @@ void RFLIB::transmit(char * message, int retries){
   }
 
 void RFLIB::transmit(char * message){
+#ifdef RPI_PICO_PLATFORM
+  busy_wait_us (100);
+#else
   delay(100);
+#endif
   got_ack=0;
   got_message=0;
   strncpy(message_out, message, 12);
+#ifdef RPI_PICO_PLATFORM
+  printf("Sending message");
+  printf(message);
+  uart_puts(uart0, message_out);
+#else
   Serial.println("Sending message");
   Serial.println(message);
   Serial2.write(message_out);
+#endif
   timeout=false;
   if (retries_ind){
     overall_time = millis();
@@ -125,14 +164,23 @@ void RFLIB::process_rf(void){
   
   if (sent_time > 0 && !timeout){
     if (millis() - overall_time > total_timeout) { //timeout after n seconds
+#ifdef RPI_PICO_PLATFORM
+      printf("Timeout - Total timeout exceeded");
+#else
       Serial.println("Timeout - Total timeout exceeded");
+#endif
       timeout=true;
       sent_time=0;
       }
     else {
       if (millis() - sent_time > resend_timeout) { //resend after 1.5 seconds if no reply
+#ifndef RPI_PICO_PLATFORM
         Serial.println("Timeout - Re-send timeout exceeded. Re-sending...");
         Serial2.write(message_out); //re-transmit the message
+#else
+        printf("Timeout - Re-send timeout exceeded. Re-sending...");
+        uart_puts(uart0, message_out);
+#endif
         sent_time = millis();
       }     
     }    
@@ -141,9 +189,15 @@ void RFLIB::process_rf(void){
   if (char_cnt==12){
     memset(message_in,0x00,13);
   }
+
+#ifdef RPI_PICO_PLATFORM
+  if (uart_is_readable (uart0)) {
+    inChar =  uart_getc (uart0);
+#else
   if (Serial2.available()) { //# we have a message arriving
-  //while (Serial2.available()) { //# we have a message arriving
     inChar = Serial2.read();
+#endif
+  //while (Serial2.available()) { //# we have a message arriving
     if (inChar == 'a') {
       char_cnt = 0;
     }
@@ -156,7 +210,11 @@ void RFLIB::process_rf(void){
       if (strncmp(message_in, prev_message,12)!=0 || !filter_duplicates){
         strncpy(prev_message, message_in,12);
         if (strncmp(message_in, message_out,12)==0) {
+#ifdef RPI_PICO_PLATFORM
+          printf("ACK received");
+#else
           Serial.println("ACK received");
+#endif
           got_ack=1;
         }
         if (strncmp(message_in+1, message_out+1,2)==0) {  //ID's are the same
@@ -168,8 +226,13 @@ void RFLIB::process_rf(void){
           Event();  
       } 
       else{
+#ifdef RPI_PICO_PLATFORM
+        printf("Ignoring duplicate RF message:");
+        printf(message_in);
+#else
         Serial.print("Ignoring duplicate RF message:");
         Serial.println(message_in);
+#endif
       }      
     }
   }
@@ -321,10 +384,18 @@ uint8_t get_from_queue(char message[13]){
   uint8_t x;
   for (x=0;x<MESSAGE_BUFFER_SIZE;x++){
     if (message_buf[x][0]!=0x00){ //if there is an RF message in the queue then do an HTTP call to the PrivateEyePi server
+#ifdef RPI_PICO_PLATFORM
+      printf("Processing RF message");
+#else
       Serial.println("Processing RF message");
+#endif
       memcpy(message,message_buf[x],13);
       memset(message_buf[x],0x00,13); //take the message off the queue
+#ifdef RPI_PICO_PLATFORM
+      printf(message);
+#else
       Serial.println(message);
+#endif
       return(1);
     }
   }  
